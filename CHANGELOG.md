@@ -2,7 +2,7 @@
 
 All notable changes to `n8n-nodes-synology-filestation` are documented in this file.
 
-## [Unreleased]
+## [1.0.2] - 2026-08-03
 
 ### Fixed
 
