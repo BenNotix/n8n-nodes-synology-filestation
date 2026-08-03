@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-synology-filestation",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "n8n community node for Synology DSM File Station — browse, upload, download, copy, move, rename and delete files, create sharing links, search, compress/extract archives, checksums, thumbnails and more",
 	"keywords": [
 		"n8n-community-node-package",
