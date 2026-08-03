@@ -27,6 +27,7 @@ import {
 	dsmErrorCode,
 	fileErrorMessage,
 	fileNameFromPath,
+	normalizeFileStationPath,
 	parseCustomHeaders,
 	resolvedApiVersion,
 	synologyApiRequest,
@@ -260,6 +261,14 @@ export class SynologyFileStation implements INodeType {
 		const resource = this.getNodeParameter('resource', 0);
 		const operation = this.getNodeParameter('operation', 0);
 
+		// Read a path parameter with cleanup of the most common paste mistakes
+		const getPath = (parameterName: string, itemIndex: number): string =>
+			normalizeFileStationPath.call(
+				this,
+				this.getNodeParameter(parameterName, itemIndex),
+				itemIndex,
+			);
+
 		// One File Station session for the whole execution
 		const session: SynologySession = await synologyLogin.call(this);
 
@@ -270,11 +279,8 @@ export class SynologyFileStation implements INodeType {
 
 					if (resource === 'file') {
 						if (operation === 'copy' || operation === 'move') {
-							const path = this.getNodeParameter('path', i) as string;
-							const destinationFolderPath = this.getNodeParameter(
-								'destinationFolderPath',
-								i,
-							) as string;
+							const path = getPath('path', i);
+							const destinationFolderPath = getPath('destinationFolderPath', i);
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = {
 								path: [path],
@@ -300,10 +306,11 @@ export class SynologyFileStation implements INodeType {
 									taskid,
 									(options.maxWaitTime as number) ?? 300,
 									i,
+									params,
 								);
 							}
 						} else if (operation === 'delete') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = {
 								path: [path],
@@ -327,11 +334,12 @@ export class SynologyFileStation implements INodeType {
 									taskid,
 									(options.maxWaitTime as number) ?? 300,
 									i,
+									params,
 								);
 								responseData = { success: true, path, ...status };
 							}
 						} else if (operation === 'download') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
 							const info = await synologyApiRequest.call(
 								this,
@@ -369,7 +377,7 @@ export class SynologyFileStation implements INodeType {
 							});
 							continue;
 						} else if (operation === 'get') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = { path: [path] };
 							addIfSet(params, 'additional', options.additional);
@@ -386,7 +394,7 @@ export class SynologyFileStation implements INodeType {
 								i,
 							);
 						} else if (operation === 'rename') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const newName = this.getNodeParameter('newName', i) as string;
 							const data = await synologyApiRequest.call(
 								this,
@@ -401,7 +409,7 @@ export class SynologyFileStation implements INodeType {
 								i,
 							);
 						} else if (operation === 'upload') {
-							const folderPath = this.getNodeParameter('folderPath', i) as string;
+							const folderPath = getPath('folderPath', i);
 							const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const binaryData = this.helpers.assertBinaryData(i, binaryPropertyName);
@@ -437,7 +445,7 @@ export class SynologyFileStation implements INodeType {
 						}
 					} else if (resource === 'folder') {
 						if (operation === 'create') {
-							const folderPath = this.getNodeParameter('folderPath', i) as string;
+							const folderPath = getPath('folderPath', i);
 							const name = this.getNodeParameter('name', i) as string;
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = {
@@ -459,14 +467,18 @@ export class SynologyFileStation implements INodeType {
 								i,
 							);
 						} else if (operation === 'delete') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
+							const params: IDataObject = {
+								path: [path],
+								recursive: options.recursive !== false,
+							};
 							const start = await synologyApiRequest.call(
 								this,
 								session,
 								'SYNO.FileStation.Delete',
 								'start',
-								{ path: [path], recursive: options.recursive !== false },
+								params,
 							);
 							const taskid = start.taskid as string;
 							if (options.waitForCompletion === false) {
@@ -479,11 +491,12 @@ export class SynologyFileStation implements INodeType {
 									taskid,
 									(options.maxWaitTime as number) ?? 300,
 									i,
+									params,
 								);
 								responseData = { success: true, path, ...status };
 							}
 						} else if (operation === 'getAll') {
-							const folderPath = this.getNodeParameter('folderPath', i) as string;
+							const folderPath = getPath('folderPath', i);
 							const returnAll = this.getNodeParameter('returnAll', i, false) as boolean;
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = {
@@ -533,7 +546,7 @@ export class SynologyFileStation implements INodeType {
 							);
 							responseData = { success: true };
 						} else if (operation === 'create') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const additionalFields = this.getNodeParameter(
 								'additionalFields',
 								i,
@@ -634,7 +647,7 @@ export class SynologyFileStation implements INodeType {
 						}
 					} else if (resource === 'search') {
 						if (operation === 'find') {
-							const folderPath = this.getNodeParameter('folderPath', i) as string;
+							const folderPath = getPath('folderPath', i);
 							const pattern = this.getNodeParameter('pattern', i, '') as string;
 							const returnAll = this.getNodeParameter('returnAll', i, false) as boolean;
 							const filters = this.getNodeParameter('filters', i, {}) as IDataObject;
@@ -742,8 +755,8 @@ export class SynologyFileStation implements INodeType {
 						}
 					} else if (resource === 'archive') {
 						if (operation === 'compress') {
-							const path = this.getNodeParameter('path', i) as string;
-							const destinationFilePath = this.getNodeParameter('destinationFilePath', i) as string;
+							const path = getPath('path', i);
+							const destinationFilePath = getPath('destinationFilePath', i);
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = {
 								path: [path],
@@ -771,14 +784,12 @@ export class SynologyFileStation implements INodeType {
 									taskid,
 									(options.maxWaitTime as number) ?? 300,
 									i,
+									params,
 								);
 							}
 						} else if (operation === 'extract') {
-							const filePath = this.getNodeParameter('filePath', i) as string;
-							const destinationFolderPath = this.getNodeParameter(
-								'destinationFolderPath',
-								i,
-							) as string;
+							const filePath = getPath('filePath', i);
+							const destinationFolderPath = getPath('destinationFolderPath', i);
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = {
 								file_path: filePath,
@@ -806,10 +817,11 @@ export class SynologyFileStation implements INodeType {
 									taskid,
 									(options.maxWaitTime as number) ?? 300,
 									i,
+									params,
 								);
 							}
 						} else if (operation === 'listContents') {
-							const filePath = this.getNodeParameter('filePath', i) as string;
+							const filePath = getPath('filePath', i);
 							const returnAll = this.getNodeParameter('returnAll', i, false) as boolean;
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = {
@@ -831,7 +843,7 @@ export class SynologyFileStation implements INodeType {
 						}
 					} else if (resource === 'utility') {
 						if (operation === 'checkPermission') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const fileName = this.getNodeParameter('fileName', i) as string;
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = {
@@ -868,7 +880,7 @@ export class SynologyFileStation implements INodeType {
 								}
 							}
 						} else if (operation === 'dirSize') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const start = await synologyApiRequest.call(
 								this,
@@ -884,6 +896,7 @@ export class SynologyFileStation implements INodeType {
 								start.taskid as string,
 								(options.maxWaitTime as number) ?? 300,
 								i,
+								{ path: [path] },
 							);
 							responseData = { path, ...status };
 						} else if (operation === 'getInfo') {
@@ -894,7 +907,7 @@ export class SynologyFileStation implements INodeType {
 								'get',
 							);
 						} else if (operation === 'md5') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const start = await synologyApiRequest.call(
 								this,
@@ -910,10 +923,11 @@ export class SynologyFileStation implements INodeType {
 								start.taskid as string,
 								(options.maxWaitTime as number) ?? 300,
 								i,
+								{ file_path: path },
 							);
 							responseData = { path, md5: status.md5 };
 						} else if (operation === 'thumbnail') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const binaryPropertyName = this.getNodeParameter('binaryPropertyName', i) as string;
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = { path };
@@ -944,7 +958,7 @@ export class SynologyFileStation implements INodeType {
 						}
 					} else if (resource === 'favorite') {
 						if (operation === 'add') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const name = this.getNodeParameter('name', i) as string;
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
 							const params: IDataObject = { path, name };
@@ -960,7 +974,7 @@ export class SynologyFileStation implements INodeType {
 							);
 							responseData = { success: true };
 						} else if (operation === 'delete') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							await synologyApiRequest.call(this, session, 'SYNO.FileStation.Favorite', 'delete', {
 								path,
 							});
@@ -982,7 +996,7 @@ export class SynologyFileStation implements INodeType {
 							);
 							responseData = (data.favorites as IDataObject[]) ?? [];
 						} else if (operation === 'update') {
-							const path = this.getNodeParameter('path', i) as string;
+							const path = getPath('path', i);
 							const name = this.getNodeParameter('name', i) as string;
 							await synologyApiRequest.call(this, session, 'SYNO.FileStation.Favorite', 'edit', {
 								path,

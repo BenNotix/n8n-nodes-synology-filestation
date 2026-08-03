@@ -51,7 +51,7 @@ QuickConnect cannot be used — it is a relay, not a direct HTTP endpoint.
 
 ## Operations
 
-All paths start with a shared folder, e.g. `/photo/vacation/img_001.jpg`.
+All paths start with a **shared folder as shown in DSM**, e.g. `/photo/vacation/img_001.jpg` — use *Folder → List Shares* to discover the available roots. Mount paths from your computer (macOS `/Volumes/…`, Windows `\\NAS\…`) and internal volume paths (`/volume1/…`) are **not** File Station paths; the node rejects or flags them with an explicit message. Wrapping quotes and a missing leading slash are fixed automatically.
 
 ### File
 

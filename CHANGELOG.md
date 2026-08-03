@@ -2,6 +2,13 @@
 
 All notable changes to `n8n-nodes-synology-filestation` are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Path parameters are now normalized before being sent to the NAS: wrapping shell quotes (from paths pasted out of Finder or a terminal) are stripped and a missing leading slash is added.
+- Clear, actionable errors for the most common path mistakes instead of DSM's generic "Unknown error of file operation (401)": macOS mount paths (`/Volumes/…`) and internal volume paths (`/volume1/…`) are flagged with an explanation when a request fails, and Windows-style paths (`C:\…`, `\\NAS\…`) are rejected upfront.
+
 ## [1.0.1] - 2026-08-03
 
 ### Added

@@ -217,9 +217,15 @@ export function dsmErrorCode(error: unknown): number | undefined {
 
 /**
  * Build a NodeApiError out of a `{"success": false, "error": {...}}` envelope,
- * including the per-file detail entries when the NAS provides them.
+ * including the per-file detail entries when the NAS provides them and an
+ * optional usage hint.
  */
-function apiError(this: SynologyContext, api: string, error: IDataObject): NodeApiError {
+function apiError(
+	this: SynologyContext,
+	api: string,
+	error: IDataObject,
+	hint?: string,
+): NodeApiError {
 	const code = error.code as number;
 	const message = `${errorMessageForCode(api, code)} [${api} error ${code}]`;
 	const details = (error.errors as IDataObject[] | undefined)
@@ -231,9 +237,10 @@ function apiError(this: SynologyContext, api: string, error: IDataObject): NodeA
 				: target;
 		})
 		.join('; ');
+	const description = [details, hint].filter((part) => part !== undefined && part !== '').join(' — ');
 	return new NodeApiError(this.getNode(), error as JsonObject, {
 		message,
-		description: details !== undefined && details !== '' ? details : undefined,
+		description: description !== '' ? description : undefined,
 	});
 }
 
@@ -443,7 +450,7 @@ export async function synologyApiRequest(
 	});
 	const body = parseJsonBody.call(this, responseBody);
 	if (body.success !== true) {
-		throw apiError.call(this, api, (body.error ?? {}) as IDataObject);
+		throw apiError.call(this, api, (body.error ?? {}) as IDataObject, pathFormatHint(params));
 	}
 	return (body.data ?? {}) as IDataObject;
 }
@@ -526,7 +533,7 @@ export async function synologyBinaryRequest(
 			parsed = undefined;
 		}
 		if (parsed !== undefined && parsed.success === false && parsed.error !== undefined) {
-			throw apiError.call(this, api, parsed.error as IDataObject);
+			throw apiError.call(this, api, parsed.error as IDataObject, pathFormatHint(params));
 		}
 		// Not an error envelope after all — hand the bytes through
 		return { content: Buffer.from(text, 'utf8'), contentType };
@@ -591,7 +598,7 @@ export async function synologyUploadRequest(
 	});
 	const parsed = parseJsonBody.call(this, responseBody);
 	if (parsed.success !== true) {
-		throw apiError.call(this, api, (parsed.error ?? {}) as IDataObject);
+		throw apiError.call(this, api, (parsed.error ?? {}) as IDataObject, pathFormatHint(params));
 	}
 	return (parsed.data ?? {}) as IDataObject;
 }
@@ -600,6 +607,10 @@ export async function synologyUploadRequest(
  * Poll a non-blocking task (CopyMove, Delete, Extract, Compress, DirSize, MD5)
  * until its `status` method reports finished, and return the final status.
  * On timeout the task is stopped on the NAS before throwing.
+ *
+ * `startParams` are the parameters the task was started with: task failures
+ * surface in the status poll (whose only parameter is the taskid), so the
+ * path-format hint must be derived from the original request.
  */
 export async function waitForSynologyTask(
 	this: IExecuteFunctions,
@@ -608,10 +619,24 @@ export async function waitForSynologyTask(
 	taskid: string,
 	maxWaitTime: number,
 	itemIndex: number,
+	startParams: IDataObject = {},
 ): Promise<IDataObject> {
+	const hint = pathFormatHint(startParams);
 	const deadline = Date.now() + maxWaitTime * 1000;
 	for (;;) {
-		const status = await synologyApiRequest.call(this, session, api, 'status', { taskid });
+		let status: IDataObject;
+		try {
+			status = await synologyApiRequest.call(this, session, api, 'status', { taskid });
+		} catch (error) {
+			if (hint !== undefined && error instanceof NodeApiError) {
+				error.description =
+					error.description !== undefined && error.description !== null && error.description !== ''
+						? `${error.description} — ${hint}`
+						: hint;
+			}
+			const alreadyWrapped = error;
+			throw alreadyWrapped;
+		}
 		if (status.finished === true) {
 			return status;
 		}
@@ -637,6 +662,68 @@ export async function waitForSynologyTask(
  */
 export function fileErrorMessage(code: number): string {
 	return FILE_ERRORS[code] ?? COMMON_ERRORS[code] ?? 'Unknown error';
+}
+
+/** Request parameters that carry File Station paths. */
+const PATH_PARAM_KEYS = ['path', 'folder_path', 'file_path', 'dest_folder_path', 'dest_file_path'];
+
+/**
+ * A hint for the most common path mistakes — computer mount paths and internal
+ * volume paths pasted where a File Station path (starting with the shared
+ * folder name) is expected. DSM rejects those with unhelpful generic errors.
+ */
+function pathFormatHint(params: IDataObject): string | undefined {
+	for (const key of PATH_PARAM_KEYS) {
+		const value = params[key];
+		const paths = Array.isArray(value) ? value : typeof value === 'string' ? [value] : [];
+		for (const path of paths) {
+			if (typeof path !== 'string') {
+				continue;
+			}
+			// Case-sensitive on purpose: a real shared folder named "volumes"
+			// must not trigger the macOS hint
+			if (/^\/Volumes\//.test(path)) {
+				return `"${path}" looks like a macOS mount path. File Station paths start with the shared folder name as shown in DSM (for example /photo/…) — remove the /Volumes prefix and use "Folder → List Shares" to see the available shared folders.`;
+			}
+			if (/^\/volume\d+\//.test(path)) {
+				return `"${path}" looks like an internal volume path. File Station paths start with the shared folder name (for example /photo/…), without the /volumeX prefix.`;
+			}
+		}
+	}
+	return undefined;
+}
+
+/**
+ * Clean up a user-supplied File Station path: strip wrapping shell quotes
+ * (common when a path is pasted from Finder or a terminal), add the missing
+ * leading slash, and reject Windows-style paths outright.
+ *
+ * The content of a quote-wrapped path is used verbatim — quoting is also the
+ * way to express a name with an intentional leading/trailing space.
+ */
+export function normalizeFileStationPath(
+	this: IExecuteFunctions,
+	value: unknown,
+	itemIndex: number,
+): string {
+	let path = (typeof value === 'string' ? value : String(value ?? '')).trim();
+	if (path.length >= 2 && (path[0] === "'" || path[0] === '"') && path.endsWith(path[0])) {
+		path = path.slice(1, -1);
+	}
+	if (path.trim() === '') {
+		throw new NodeOperationError(this.getNode(), 'The path is empty', { itemIndex });
+	}
+	if (/^(\\\\|[A-Za-z]:[\\/])/.test(path.trim())) {
+		throw new NodeOperationError(
+			this.getNode(),
+			`"${path}" is a Windows-style path — File Station paths start with the shared folder name as shown in DSM, for example /photo/vacation/img_001.jpg`,
+			{ itemIndex },
+		);
+	}
+	if (!path.startsWith('/')) {
+		path = `/${path}`;
+	}
+	return path;
 }
 
 /** Basename of a File Station path, for naming downloaded binaries. */
