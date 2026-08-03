@@ -1,7 +1,7 @@
 {
 	"name": "n8n-nodes-synology-filestation",
 	"version": "1.1.0",
-	"description": "n8n community node for Synology DSM File Station — browse, upload, download, copy, move, rename and delete files, create sharing links, search, compress/extract archives, checksums, thumbnails and more",
+	"description": "n8n community nodes for Synology DSM File Station — manage NAS files (upload, download, copy, move, rename, delete, share links, search, archives, checksums, thumbnails), trigger workflows on file changes, and expose it all as an AI Agent tool",
 	"keywords": [
 		"n8n-community-node-package",
 		"synology",
@@ -10,7 +10,12 @@
 		"file station",
 		"filestation",
 		"files",
-		"storage"
+		"storage",
+		"trigger",
+		"automation",
+		"backup",
+		"file management",
+		"ai-agent"
 	],
 	"license": "MIT",
 	"homepage": "https://github.com/BenNotix/n8n-nodes-synology-filestation",

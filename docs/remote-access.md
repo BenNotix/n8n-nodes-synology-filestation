@@ -56,7 +56,7 @@ Using plain HTTP on port 5000 is fine **because the hop never leaves the NAS** (
 | Credential field | Value |
 | --- | --- |
 | Base URL | `https://nas-api.example.com` (no port) |
-| Ignore SSL Issues | off — the edge certificate is valid |
+| Ignore SSL Issues (Insecure) | off — the edge certificate is valid |
 | Custom Headers | `CF-Access-Client-Id` = `<client-id>.access` and `CF-Access-Client-Secret` = `<secret>` |
 
 Verify from a terminal before testing in n8n:

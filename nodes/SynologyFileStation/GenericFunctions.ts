@@ -78,18 +78,18 @@ const KNOWN_APIS = Object.keys(PREFERRED_VERSIONS);
 /** Common error codes shared by all DSM Web APIs. */
 const COMMON_ERRORS: Record<number, string> = {
 	100: 'Unknown error',
-	101: 'No parameter of API, method or version',
+	101: 'Missing API, method or version parameter',
 	102: 'The requested API does not exist',
 	103: 'The requested method does not exist',
 	104: 'The requested version does not support the functionality',
-	105: 'The logged in session does not have permission',
+	105: 'The logged-in session does not have permission',
 	106: 'Session timeout',
 	107: 'Session interrupted by duplicated login',
 	108: 'Failed to upload the file',
 	109: 'The network connection is unstable or the system is busy',
 	110: 'The network connection is unstable or the system is busy',
 	111: 'The network connection is unstable or the system is busy',
-	114: 'Lost parameters for this API',
+	114: 'Missing parameters for this API',
 	115: 'Not allowed to upload a file',
 	116: 'Not allowed to perform for a demo site',
 	117: 'The network connection is unstable or the system is busy',
@@ -107,7 +107,7 @@ const AUTH_ERRORS: Record<number, string> = {
 	404: 'Failed to authenticate the 2-factor authentication code',
 	406: '2-factor authentication is enforced — use an account without 2FA',
 	407: 'Blocked IP source',
-	408: 'Expired password cannot change',
+	408: 'Password expired and cannot be changed',
 	409: 'Expired password',
 	410: 'Password must be changed',
 };
@@ -120,7 +120,7 @@ const FILE_ERRORS: Record<number, string> = {
 	403: 'The user does not have permission for this file operation',
 	404: 'The group does not have permission for this file operation',
 	405: 'The user and group do not have permission for this file operation',
-	406: "Can't get user/group information from the account server",
+	406: 'Cannot get user/group information from the account server',
 	407: 'Operation not permitted',
 	408: 'No such file or directory',
 	409: 'Unsupported file system',
@@ -136,7 +136,7 @@ const FILE_ERRORS: Record<number, string> = {
 	419: 'Illegal file name',
 	420: 'Illegal file name on FAT file system',
 	421: 'Device or resource busy',
-	599: 'No such task of the file operation',
+	599: 'No such file operation task',
 };
 
 /** API-specific error codes, keyed by API name. */
@@ -183,16 +183,16 @@ const API_ERRORS: Record<string, Record<number, string>> = {
 		1802: 'No filename information in the last part of the file content',
 		1803: 'Upload connection was cancelled',
 		1804: 'Failed to upload an oversized file to a FAT file system',
-		1805: "Can't overwrite or skip the existing file because no overwrite behavior was chosen",
+		1805: 'Cannot overwrite or skip the existing file because no overwrite behavior was chosen',
 	},
 	'SYNO.FileStation.Sharing': {
-		2000: 'Sharing link does not exist',
-		2001: 'Cannot generate the sharing link because too many sharing links exist',
-		2002: 'Failed to access sharing links',
+		2000: 'Share link does not exist',
+		2001: 'Cannot generate the share link because too many share links exist',
+		2002: 'Failed to access share links',
 	},
 };
 
-function errorMessageForCode(api: string, code: number): string {
+export function errorMessageForCode(api: string, code: number): string {
 	if (api === 'SYNO.API.Auth' && AUTH_ERRORS[code] !== undefined) {
 		return AUTH_ERRORS[code];
 	}
@@ -750,6 +750,68 @@ export function normalizeFileStationPath(
 		path = `/${path}`;
 	}
 	return path;
+}
+
+/**
+ * Run a File Station search to completion and return the matched files.
+ * Shared by the Search: Find operation and the trigger node; the temporary
+ * result database on the NAS is always cleaned up.
+ */
+export async function runSynologySearch(
+	this: SynologyContext,
+	session: SynologySession,
+	startParams: IDataObject,
+	listParams: IDataObject,
+	maxWaitTime: number,
+): Promise<IDataObject[]> {
+	const start = await synologyApiRequest.call(
+		this,
+		session,
+		'SYNO.FileStation.Search',
+		'start',
+		startParams,
+	);
+	const taskid = start.taskid as string;
+	try {
+		const deadline = Date.now() + maxWaitTime * 1000;
+		for (;;) {
+			// limit 0 returns the finished flag without transferring files
+			const poll = await synologyApiRequest.call(this, session, 'SYNO.FileStation.Search', 'list', {
+				taskid,
+				limit: 0,
+			});
+			if (poll.finished === true) {
+				break;
+			}
+			if (Date.now() >= deadline) {
+				try {
+					await synologyApiRequest.call(this, session, 'SYNO.FileStation.Search', 'stop', {
+						taskid: [taskid],
+					});
+				} catch {
+					// Report the timeout, not the cleanup failure
+				}
+				throw new NodeOperationError(
+					this.getNode(),
+					`The search did not finish within ${maxWaitTime} seconds — narrow the search or increase Max Wait Time`,
+				);
+			}
+			await sleep(POLL_INTERVAL_MS);
+		}
+		const result = await synologyApiRequest.call(this, session, 'SYNO.FileStation.Search', 'list', {
+			taskid,
+			...listParams,
+		});
+		return (result.files as IDataObject[]) ?? [];
+	} finally {
+		try {
+			await synologyApiRequest.call(this, session, 'SYNO.FileStation.Search', 'clean', {
+				taskid: [taskid],
+			});
+		} catch {
+			// Cleanup failures must not mask the search result
+		}
+	}
 }
 
 /**

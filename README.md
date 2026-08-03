@@ -1,6 +1,6 @@
 # n8n-nodes-synology-filestation
 
-n8n community node for **Synology DSM File Station** — manage the files of your Synology NAS natively from your n8n workflows: browse, upload, download, copy, move, rename, delete, create sharing links, search, compress/extract archives, checksums, thumbnails and more.
+n8n community node for **Synology DSM File Station** — manage the files of your Synology NAS natively from your n8n workflows: browse, upload, download, copy, move, rename, delete, create share links, search, compress/extract archives, checksums, thumbnails and more.
 
 Works with **DSM 6 and DSM 7**: the node discovers the API versions and paths of your NAS through `SYNO.API.Info` at runtime, exactly as the [official API guide](https://global.download.synology.com/download/Document/Software/DeveloperGuide/Package/FileStation/All/enu/Synology_File_Station_API_Guide.pdf) prescribes.
 
@@ -14,11 +14,19 @@ Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes
 2. Select **Install**.
 3. Enter `n8n-nodes-synology-filestation` and confirm.
 
-Or with a self-hosted npm install:
+Or manually on a self-hosted instance, inside n8n's user folder:
 
 ```bash
+cd ~/.n8n/nodes
 npm install n8n-nodes-synology-filestation
 ```
+
+Then restart n8n.
+
+## Compatibility
+
+- **n8n**: requires a version with community-nodes support; developed and tested against recent n8n 1.x/2.x releases. Using the node as an AI Agent tool requires n8n ≥ 1.79.
+- **Synology DSM**: DSM 6.0 and DSM 7.x — API versions and paths are discovered at runtime through `SYNO.API.Info`.
 
 ## Credentials
 
@@ -29,7 +37,7 @@ Create a **Synology API** credential with:
 | **Base URL** | Address of your DSM, including protocol and port — e.g. `https://nas.example.com:5001` or `http://192.168.1.10:5000`. QuickConnect URLs are not supported; use a direct IP, a local hostname or a DDNS address. |
 | **Username** | DSM account to log in with. |
 | **Password** | Password of the account. |
-| **Ignore SSL Issues** | Enable if your DSM uses its default self-signed certificate. |
+| **Ignore SSL Issues (Insecure)** | Enable if your DSM uses its default self-signed certificate. |
 | **Custom Headers** | Optional headers sent with every request — e.g. the `CF-Access-Client-Id` / `CF-Access-Client-Secret` service-token headers when DSM sits behind Cloudflare Access. |
 
 Recommendations:
@@ -78,10 +86,10 @@ All paths start with a **shared folder as shown in DSM**, e.g. `/photo/vacation/
 
 | Operation | Description |
 | --- | --- |
-| Create | Create a public sharing link (optional password, availability and expiration dates) |
-| Get / Get Many | Read one or all sharing links |
+| Create | Create a public share link (optional password, availability and expiration dates) |
+| Get / Get Many | Read one or all share links |
 | Update | Change/remove the password or the dates of a link |
-| Delete | Delete a sharing link |
+| Delete | Delete a share link |
 | Clear Invalid | Remove all expired and broken links |
 
 ### Search
@@ -135,7 +143,7 @@ The **Synology File Station Trigger** node starts a workflow when files change o
 
 ## Use with AI agents
 
-The Synology File Station node is exposed as a **tool for n8n AI Agents** (`usableAsTool`): an agent can browse folders, search files, read metadata, create sharing links, upload or download on its own, with each operation and parameter described for the LLM.
+The Synology File Station node is exposed as a **tool for n8n AI Agents** (`usableAsTool`): an agent can browse folders, search files, read metadata, create share links, upload or download on its own, with each operation and parameter described for the LLM.
 
 On self-hosted n8n, allow community packages as tools first:
 
@@ -151,7 +159,7 @@ Copy, Move, Delete, Compress and Extract are **non-blocking** on the NAS (`start
 
 ## Usage examples
 
-- **Watch a folder** — Schedule Trigger → `Folder: Get Many` (sort by created time desc) → IF new items → process.
+- **Watch a folder** — Synology File Station Trigger (*File Created*) on `/photo/uploads` → `File: Download` → process each new file.
 - **Back up generated reports** — previous node outputs binary → `File: Upload` to `/backup/reports` with Create Parent Folders.
 - **Share a file with a client** — `File: Upload` → `Share Link: Create` with password + expiration → send the returned `url` by e-mail.
 - **Clean up old archives** — `Search: Find` in `/download` with Modified Before + extension `zip` → `File: Delete`.
@@ -169,6 +177,10 @@ Copy, Move, Delete, Compress and Extract are **non-blocking** on the NAS (`start
 - [Synology File Station Official API guide (PDF)](https://global.download.synology.com/download/Document/Software/DeveloperGuide/Package/FileStation/All/enu/Synology_File_Station_API_Guide.pdf)
 - [DSM Login Web API guide](https://kb.synology.com/en-global/DG/DSM_Login_Web_API_Guide)
 - [n8n community nodes documentation](https://docs.n8n.io/integrations/community-nodes/)
+
+## Version history
+
+See [CHANGELOG.md](CHANGELOG.md) for the release history.
 
 ## License
 

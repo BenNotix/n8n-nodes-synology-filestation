@@ -8,12 +8,12 @@ import type {
 	INodeTypeDescription,
 	IPollFunctions,
 } from 'n8n-workflow';
-import { NodeConnectionTypes, NodeOperationError, sleep } from 'n8n-workflow';
+import { NodeConnectionTypes } from 'n8n-workflow';
 
 import type { SynologySession } from '../SynologyFileStation/GenericFunctions';
 import {
 	normalizeFileStationPath,
-	synologyApiRequest,
+	runSynologySearch,
 	synologyLogin,
 	synologyLogout,
 	testSynologyCredential,
@@ -61,67 +61,6 @@ function eventTimeOf(file: IDataObject, event: string): number | undefined {
 }
 
 /**
- * Run a File Station search to completion and return the matched files.
- * The temporary result database on the NAS is always cleaned up.
- */
-async function runSearch(
-	this: IPollFunctions,
-	session: SynologySession,
-	startParams: IDataObject,
-	listParams: IDataObject,
-	maxWaitTime: number,
-): Promise<IDataObject[]> {
-	const start = await synologyApiRequest.call(
-		this,
-		session,
-		'SYNO.FileStation.Search',
-		'start',
-		startParams,
-	);
-	const taskid = start.taskid as string;
-	try {
-		const deadline = Date.now() + maxWaitTime * 1000;
-		for (;;) {
-			// limit 0 returns the finished flag without transferring files
-			const poll = await synologyApiRequest.call(this, session, 'SYNO.FileStation.Search', 'list', {
-				taskid,
-				limit: 0,
-			});
-			if (poll.finished === true) {
-				break;
-			}
-			if (Date.now() >= deadline) {
-				try {
-					await synologyApiRequest.call(this, session, 'SYNO.FileStation.Search', 'stop', {
-						taskid: [taskid],
-					});
-				} catch {
-					// Report the timeout, not the cleanup failure
-				}
-				throw new NodeOperationError(
-					this.getNode(),
-					`The search did not finish within ${maxWaitTime} seconds — reduce the watched tree or increase Max Wait Time`,
-				);
-			}
-			await sleep(1000);
-		}
-		const result = await synologyApiRequest.call(this, session, 'SYNO.FileStation.Search', 'list', {
-			taskid,
-			...listParams,
-		});
-		return (result.files as IDataObject[]) ?? [];
-	} finally {
-		try {
-			await synologyApiRequest.call(this, session, 'SYNO.FileStation.Search', 'clean', {
-				taskid: [taskid],
-			});
-		} catch {
-			// Cleanup failures must not mask the search result
-		}
-	}
-}
-
-/**
  * Fetch the candidate files changed since `from`. "Created or updated" needs
  * the union of a crtime-filtered and an mtime-filtered search: common copy
  * tools (SMB/Finder, rsync -a, sync clients) preserve the source mtime, so a
@@ -149,7 +88,7 @@ async function collectCandidates(
 		if (from !== undefined) {
 			startParams[filter] = from;
 		}
-		const files = await runSearch.call(this, session, startParams, listParams, maxWaitTime);
+		const files = await runSynologySearch.call(this, session, startParams, listParams, maxWaitTime);
 		for (const file of files) {
 			byPath.set(file.path as string, file);
 		}
@@ -206,7 +145,7 @@ export class SynologyFileStationTrigger implements INodeType {
 						name: 'File Updated',
 						value: 'fileUpdated',
 						description:
-							'Trigger for files modified after their creation (a fresh file is not an update)',
+							'Trigger for files modified after their creation (a newly created file does not count as an update)',
 					},
 				],
 				default: 'fileCreated',
@@ -248,7 +187,7 @@ export class SynologyFileStationTrigger implements INodeType {
 						name: 'fileType',
 						type: 'options',
 						options: [
-							{ name: 'Files and Folders', value: 'all' },
+							{ name: 'All', value: 'all' },
 							{ name: 'Files Only', value: 'file' },
 							{ name: 'Folders Only', value: 'dir' },
 						],
@@ -269,7 +208,7 @@ export class SynologyFileStationTrigger implements INodeType {
 						default: '',
 						placeholder: 'report_*',
 						description:
-							'Case-insensitive glob pattern the file names must match. Without glob characters (* or ?) the pattern matches partially.',
+							'Case-insensitive glob pattern the file names must match. Without glob characters (* or ?) the pattern matches partially. Multiple patterns can be separated by spaces.',
 					},
 				],
 			},
@@ -313,7 +252,7 @@ export class SynologyFileStationTrigger implements INodeType {
 			if (isManual) {
 				// "Fetch test event": return the most recent matches, no state change
 				const sortKey = event === 'fileCreated' ? 'crtime' : 'mtime';
-				const files = await runSearch.call(
+				const files = await runSynologySearch.call(
 					this,
 					session,
 					baseParams,

@@ -147,7 +147,7 @@ export const searchFields: INodeProperties[] = [
 				name: 'recursive',
 				type: 'boolean',
 				default: true,
-				description: 'Whether to search within sub-folders',
+				description: 'Whether to search within subfolders',
 			},
 			{
 				displayName: 'Size Larger Than',

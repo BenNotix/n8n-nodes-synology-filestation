@@ -2,6 +2,19 @@
 
 All notable changes to `n8n-nodes-synology-filestation` are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Wording pass over the whole UI for consistent, professional English: "share link" everywhere (was mixed with "sharing link"), "Get Folder Size" (was "Get Directory Size"), "Refresh" compress mode label (was the raw API value "Refreshen"), "Task Type" filter for background tasks (was "API Filter"), aligned File Type and Pattern descriptions across the action and trigger nodes, and clearer DSM error messages (reworded the awkward verbatim strings from the official error tables).
+- Long-running operations now return a consistent shape: Copy/Move, Compress and Extract include `success: true` and echo the operated paths, like Delete already did.
+- README: new Compatibility section, corrected manual-install instructions (`~/.n8n/nodes`), the "Watch a folder" example now uses the Trigger node, and a Version history section points to this changelog.
+
+### Fixed
+
+- Share Link → Create now resolves the Sharing-specific error codes (2000–2002) and attaches the path-format hint, like every other operation.
+- The Search: Find operation and the trigger share one search implementation with a single polling interval.
+
 ## [1.1.0] - 2026-08-03
 
 ### Added
@@ -32,9 +45,6 @@ All notable changes to `n8n-nodes-synology-filestation` are documented in this f
 ### Added
 
 - **Custom Headers** option in the Synology API credential: extra HTTP headers sent with every request to the NAS — API discovery, login/logout, JSON and binary requests, multipart uploads and the credential test. Main use case: DSM exposed through a Cloudflare Tunnel protected by Cloudflare Access, which requires the `CF-Access-Client-Id` / `CF-Access-Client-Secret` service-token headers on each request. Header names and values are stripped of CR/LF characters.
-
-### Documentation
-
 - New "Reaching a NAS from a remote n8n" section in the README: Tailscale/WireGuard VPN, Cloudflare Tunnel (+ Access via Custom Headers), Synology DDNS with Let's Encrypt, and why QuickConnect cannot work.
 
 ## [1.0.0] - 2026-08-03

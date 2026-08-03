@@ -72,19 +72,6 @@ export const backgroundTaskFields: INodeProperties[] = [
 		displayOptions: { show: { resource: ['backgroundTask'], operation: ['getAll'] } },
 		options: [
 			{
-				displayName: 'API Filter',
-				name: 'apiFilter',
-				type: 'multiOptions',
-				options: [
-					{ name: 'Compress', value: 'SYNO.FileStation.Compress' },
-					{ name: 'Copy/Move', value: 'SYNO.FileStation.CopyMove' },
-					{ name: 'Delete', value: 'SYNO.FileStation.Delete' },
-					{ name: 'Extract', value: 'SYNO.FileStation.Extract' },
-				],
-				default: [],
-				description: 'Only list background tasks of the given operation types',
-			},
-			{
 				displayName: 'Sort By',
 				name: 'sortBy',
 				type: 'options',
@@ -103,6 +90,19 @@ export const backgroundTaskFields: INodeProperties[] = [
 					{ name: 'Descending', value: 'desc' },
 				],
 				default: 'asc',
+			},
+			{
+				displayName: 'Task Type',
+				name: 'apiFilter',
+				type: 'multiOptions',
+				options: [
+					{ name: 'Compress', value: 'SYNO.FileStation.Compress' },
+					{ name: 'Copy/Move', value: 'SYNO.FileStation.CopyMove' },
+					{ name: 'Delete', value: 'SYNO.FileStation.Delete' },
+					{ name: 'Extract', value: 'SYNO.FileStation.Extract' },
+				],
+				default: [],
+				description: 'Only list background tasks of the given operation types',
 			},
 		],
 	},

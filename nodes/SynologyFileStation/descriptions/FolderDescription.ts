@@ -50,7 +50,7 @@ export const folderOperations: INodeProperties[] = [
 				name: 'Get Many',
 				value: 'getAll',
 				description: 'List the files and folders inside a folder',
-				action: 'Get many folder contents',
+				action: 'List folder contents',
 			},
 			{
 				name: 'List Shares',
@@ -230,7 +230,7 @@ export const folderFields: INodeProperties[] = [
 				default: '',
 				placeholder: '*.jpg',
 				description:
-					'Case-insensitive glob pattern the file names must match. Multiple patterns can be separated by commas. Without glob characters (* or ?) the pattern matches partially.',
+					'Case-insensitive glob pattern the file names must match. Without glob characters (* or ?) the pattern matches partially. Multiple patterns can be separated by commas.',
 			},
 			{
 				displayName: 'Sort By',

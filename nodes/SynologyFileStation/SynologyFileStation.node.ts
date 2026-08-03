@@ -8,7 +8,7 @@ import type {
 	INodeType,
 	INodeTypeDescription,
 } from 'n8n-workflow';
-import { NodeApiError, NodeConnectionTypes, NodeOperationError, sleep } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 
 import { archiveFields, archiveOperations } from './descriptions/ArchiveDescription';
 import {
@@ -24,11 +24,13 @@ import { utilityFields, utilityOperations } from './descriptions/UtilityDescript
 import type { SynologySession } from './GenericFunctions';
 import {
 	dsmErrorCode,
+	errorMessageForCode,
 	fileErrorMessage,
 	fileNameFromPath,
 	fileStationPathHint,
 	normalizeFileStationPath,
 	resolvedApiVersion,
+	runSynologySearch,
 	synologyApiRequest,
 	synologyBinaryRequest,
 	synologyLogin,
@@ -149,7 +151,7 @@ export class SynologyFileStation implements INodeType {
 					{
 						name: 'File',
 						value: 'file',
-						description: 'Upload, download, copy, move, rename, delete files or check they exist',
+						description: 'Upload, download, copy, move, rename or delete files, or check whether they exist',
 					},
 					{
 						name: 'Folder',
@@ -164,7 +166,7 @@ export class SynologyFileStation implements INodeType {
 					{
 						name: 'Share Link',
 						value: 'share',
-						description: 'Create and manage public sharing links for files and folders',
+						description: 'Create and manage public share links for files and folders',
 					},
 					{
 						name: 'Utility',
@@ -248,7 +250,7 @@ export class SynologyFileStation implements INodeType {
 							if (options.waitForCompletion === false) {
 								responseData = { taskid };
 							} else {
-								responseData = await waitForSynologyTask.call(
+								const status = await waitForSynologyTask.call(
 									this,
 									session,
 									'SYNO.FileStation.CopyMove',
@@ -257,6 +259,7 @@ export class SynologyFileStation implements INodeType {
 									i,
 									params,
 								);
+								responseData = { success: true, path, destinationFolderPath, ...status };
 							}
 						} else if (operation === 'delete') {
 							const path = getPath('path', i);
@@ -536,8 +539,8 @@ export class SynologyFileStation implements INodeType {
 							if (typeof link.error === 'number' && link.error !== 0) {
 								throw new NodeOperationError(
 									this.getNode(),
-									`Failed to create the sharing link: ${fileErrorMessage(link.error)} (error ${link.error})`,
-									{ itemIndex: i },
+									`Failed to create the share link: ${errorMessageForCode('SYNO.FileStation.Sharing', link.error)} (error ${link.error})`,
+									{ itemIndex: i, description: fileStationPathHint(path) },
 								);
 							}
 							responseData = link;
@@ -651,76 +654,20 @@ export class SynologyFileStation implements INodeType {
 								}
 							}
 
-							const start = await synologyApiRequest.call(
+							const listParams: IDataObject = {
+								// -1 lists all matches; 0 would list nothing
+								limit: returnAll ? -1 : (this.getNodeParameter('limit', i, 50) as number),
+							};
+							addIfSet(listParams, 'sort_by', options.sortBy);
+							addIfSet(listParams, 'sort_direction', options.sortDirection);
+							addIfSet(listParams, 'additional', options.additional);
+							responseData = await runSynologySearch.call(
 								this,
 								session,
-								'SYNO.FileStation.Search',
-								'start',
 								startParams,
+								listParams,
+								(options.maxWaitTime as number) ?? 60,
 							);
-							const taskid = start.taskid as string;
-							try {
-								// Poll with limit 0: returns the finished flag without transferring files
-								const maxWaitTime = (options.maxWaitTime as number) ?? 60;
-								const deadline = Date.now() + maxWaitTime * 1000;
-								for (;;) {
-									const poll = await synologyApiRequest.call(
-										this,
-										session,
-										'SYNO.FileStation.Search',
-										'list',
-										{ taskid, limit: 0 },
-									);
-									if (poll.finished === true) {
-										break;
-									}
-									if (Date.now() >= deadline) {
-										try {
-											await synologyApiRequest.call(
-												this,
-												session,
-												'SYNO.FileStation.Search',
-												'stop',
-												{ taskid: [taskid] },
-											);
-										} catch {
-											// Report the timeout, not the cleanup failure
-										}
-										throw new NodeOperationError(
-											this.getNode(),
-											`The search did not finish within ${maxWaitTime} seconds`,
-											{ itemIndex: i },
-										);
-									}
-									await sleep(1000);
-								}
-								const listParams: IDataObject = {
-									taskid,
-									// -1 lists all matches; 0 would list nothing
-									limit: returnAll ? -1 : (this.getNodeParameter('limit', i, 50) as number),
-								};
-								addIfSet(listParams, 'sort_by', options.sortBy);
-								addIfSet(listParams, 'sort_direction', options.sortDirection);
-								addIfSet(listParams, 'additional', options.additional);
-								const result = await synologyApiRequest.call(
-									this,
-									session,
-									'SYNO.FileStation.Search',
-									'list',
-									listParams,
-								);
-								responseData = (result.files as IDataObject[]) ?? [];
-							} finally {
-								// Search results persist in a temporary database on the NAS
-								// until they are cleaned up
-								try {
-									await synologyApiRequest.call(this, session, 'SYNO.FileStation.Search', 'clean', {
-										taskid: [taskid],
-									});
-								} catch {
-									// Cleanup failures must not mask the search result
-								}
-							}
 						}
 					} else if (resource === 'archive') {
 						if (operation === 'compress') {
@@ -746,7 +693,7 @@ export class SynologyFileStation implements INodeType {
 							if (options.waitForCompletion === false) {
 								responseData = { taskid };
 							} else {
-								responseData = await waitForSynologyTask.call(
+								const status = await waitForSynologyTask.call(
 									this,
 									session,
 									'SYNO.FileStation.Compress',
@@ -755,6 +702,7 @@ export class SynologyFileStation implements INodeType {
 									i,
 									params,
 								);
+								responseData = { success: true, path, destinationFilePath, ...status };
 							}
 						} else if (operation === 'extract') {
 							const filePath = getPath('filePath', i);
@@ -779,7 +727,7 @@ export class SynologyFileStation implements INodeType {
 							if (options.waitForCompletion === false) {
 								responseData = { taskid };
 							} else {
-								responseData = await waitForSynologyTask.call(
+								const status = await waitForSynologyTask.call(
 									this,
 									session,
 									'SYNO.FileStation.Extract',
@@ -788,6 +736,7 @@ export class SynologyFileStation implements INodeType {
 									i,
 									params,
 								);
+								responseData = { success: true, filePath, destinationFolderPath, ...status };
 							}
 						} else if (operation === 'listContents') {
 							const filePath = getPath('filePath', i);

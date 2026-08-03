@@ -15,16 +15,18 @@ export const utilityOperations: INodeProperties[] = [
 				action: 'Check write permission',
 			},
 			{
-				name: 'Get Directory Size',
+				name: 'Get Folder Size',
 				value: 'dirSize',
 				description: 'Compute the accumulated size of a folder',
-				action: 'Get the size of a directory',
+				action: 'Get the size of a folder',
 			},
 			{
 				name: 'Get Info',
 				value: 'getInfo',
 				description: 'Get File Station information (hostname, capabilities)',
-				action: 'Get file station info',
+				// "File Station" is the product name — sentence case would misspell it
+				// eslint-disable-next-line n8n-nodes-base/node-param-operation-option-action-miscased
+				action: 'Get File Station info',
 			},
 			{
 				name: 'Get MD5',
@@ -80,7 +82,7 @@ export const utilityFields: INodeProperties[] = [
 				name: 'createOnly',
 				type: 'boolean',
 				default: true,
-				description: 'Whether the permission is allowed when the file/folder does not exist yet',
+				description: 'Whether the check succeeds when the target file does not exist yet',
 			},
 			{
 				displayName: 'If Target Exists',

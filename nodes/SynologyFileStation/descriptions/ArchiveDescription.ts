@@ -116,7 +116,7 @@ export const archiveFields: INodeProperties[] = [
 						description: 'Update existing items and add new files',
 					},
 					{
-						name: 'Refreshen',
+						name: 'Refresh',
 						value: 'refreshen',
 						description: 'Only update existing items that are newer on the file system',
 					},
