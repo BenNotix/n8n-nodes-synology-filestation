@@ -52,6 +52,38 @@ export class SynologyApi implements ICredentialType {
 			description:
 				'Whether to connect even if SSL certificate validation fails — common when DSM uses its default self-signed certificate',
 		},
+		{
+			displayName: 'Custom Headers',
+			name: 'customHeaders',
+			type: 'fixedCollection',
+			typeOptions: { multipleValues: true },
+			default: {},
+			placeholder: 'Add Header',
+			description:
+				'Extra HTTP headers sent with every request to the NAS — e.g. the CF-Access-Client-Id and CF-Access-Client-Secret service-token headers when DSM is exposed through a Cloudflare Tunnel protected by Cloudflare Access',
+			options: [
+				{
+					displayName: 'Header',
+					name: 'header',
+					values: [
+						{
+							displayName: 'Name',
+							name: 'name',
+							type: 'string',
+							default: '',
+							placeholder: 'CF-Access-Client-Id',
+						},
+						{
+							displayName: 'Value',
+							name: 'value',
+							type: 'string',
+							typeOptions: { password: true },
+							default: '',
+						},
+					],
+				},
+			],
+		},
 	];
 
 	// The credential is verified by the programmatic `synologyApiTest` function

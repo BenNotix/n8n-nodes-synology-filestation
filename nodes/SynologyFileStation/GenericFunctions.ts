@@ -32,6 +32,8 @@ export interface SynologySession {
 	sid: string;
 	apiInfo: Record<string, ApiInfoEntry>;
 	allowUnauthorizedCerts: boolean;
+	/** Extra headers from the credential, sent with every request (e.g. Cloudflare Access service tokens). */
+	headers: Record<string, string>;
 }
 
 /**
@@ -248,7 +250,36 @@ function formatParamValue(value: string | string[] | number | boolean): string {
 }
 
 function baseRequestOptions(session: SynologySession): Partial<IHttpRequestOptions> {
-	return session.allowUnauthorizedCerts ? { skipSslCertificateValidation: true } : {};
+	const options: Partial<IHttpRequestOptions> = {};
+	if (session.allowUnauthorizedCerts) {
+		options.skipSslCertificateValidation = true;
+	}
+	if (Object.keys(session.headers).length > 0) {
+		options.headers = session.headers;
+	}
+	return options;
+}
+
+/**
+ * Parse the credential's optional Custom Headers collection into a plain
+ * header map. Entries without a name are dropped; CR/LF are stripped so a
+ * stray value cannot corrupt the request.
+ */
+export function parseCustomHeaders(credentials: IDataObject): Record<string, string> {
+	const entries = (credentials.customHeaders as IDataObject | undefined)?.header;
+	const headers: Record<string, string> = {};
+	if (!Array.isArray(entries)) {
+		return headers;
+	}
+	for (const entry of entries as IDataObject[]) {
+		const name =
+			typeof entry.name === 'string' ? entry.name.replace(/[\r\n]+/g, '').trim() : '';
+		if (name === '') {
+			continue;
+		}
+		headers[name] = String(entry.value ?? '').replace(/[\r\n]+/g, '');
+	}
+	return headers;
 }
 
 /**
@@ -294,7 +325,13 @@ export async function synologyLogin(this: SynologyContext): Promise<SynologySess
 	const credentials = await this.getCredentials('synologyApi');
 	const baseUrl = (credentials.baseUrl as string).trim().replace(/\/+$/, '');
 	const allowUnauthorizedCerts = credentials.ignoreSslIssues === true;
-	const session: SynologySession = { baseUrl, sid: '', apiInfo: {}, allowUnauthorizedCerts };
+	const session: SynologySession = {
+		baseUrl,
+		sid: '',
+		apiInfo: {},
+		allowUnauthorizedCerts,
+		headers: parseCustomHeaders(credentials),
+	};
 
 	let infoBody: unknown;
 	try {
@@ -543,12 +580,14 @@ export async function synologyUploadRequest(
 		method: 'POST',
 		url: `${session.baseUrl}/webapi/${path}`,
 		qs: { _sid: session.sid },
+		body,
+		...baseRequestOptions(session),
+		// The multipart headers must win over any custom header from the credential
 		headers: {
+			...session.headers,
 			'Content-Type': `multipart/form-data; boundary=${boundary}`,
 			'Content-Length': body.length,
 		},
-		body,
-		...baseRequestOptions(session),
 	});
 	const parsed = parseJsonBody.call(this, responseBody);
 	if (parsed.success !== true) {

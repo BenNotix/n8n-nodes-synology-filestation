@@ -27,6 +27,7 @@ import {
 	dsmErrorCode,
 	fileErrorMessage,
 	fileNameFromPath,
+	parseCustomHeaders,
 	resolvedApiVersion,
 	synologyApiRequest,
 	synologyBinaryRequest,
@@ -175,6 +176,7 @@ export class SynologyFileStation implements INodeType {
 					};
 				}
 				const rejectUnauthorized = data.ignoreSslIssues !== true;
+				const headers = parseCustomHeaders(data);
 				let responseBody: string;
 				try {
 					// ICredentialTestFunctions only exposes the `request` helper —
@@ -192,6 +194,7 @@ export class SynologyFileStation implements INodeType {
 							session: 'FileStation',
 							format: 'sid',
 						},
+						headers,
 						json: false,
 						timeout: 10000,
 						rejectUnauthorized,
@@ -237,6 +240,7 @@ export class SynologyFileStation implements INodeType {
 								session: 'FileStation',
 								_sid: sid,
 							},
+							headers,
 							json: false,
 							timeout: 10000,
 							rejectUnauthorized,

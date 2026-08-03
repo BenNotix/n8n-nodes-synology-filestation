@@ -30,12 +30,22 @@ Create a **Synology API** credential with:
 | **Username** | DSM account to log in with. |
 | **Password** | Password of the account. |
 | **Ignore SSL Issues** | Enable if your DSM uses its default self-signed certificate. |
+| **Custom Headers** | Optional headers sent with every request — e.g. the `CF-Access-Client-Id` / `CF-Access-Client-Secret` service-token headers when DSM sits behind Cloudflare Access. |
 
 Recommendations:
 
 - Create a **dedicated DSM account** for n8n and give it access only to the shared folders you need (DSM → Control Panel → User & Group).
 - **2-factor authentication is not supported** by the DSM Web API login used here — the dedicated account must not have 2FA enabled.
 - The node logs in at the start of each execution (`SYNO.API.Auth`, session `FileStation`, `format=sid`) and logs out at the end.
+
+### Reaching a NAS from a remote n8n
+
+If your n8n instance has no direct route to the NAS (n8n Cloud, VPS):
+
+- **Tailscale / WireGuard VPN** (self-hosted n8n): install the Tailscale package on DSM, join the n8n host to the same tailnet, and use the Tailscale address as Base URL. No open ports.
+- **Cloudflare Tunnel** (works with n8n Cloud): run `cloudflared` on the NAS to publish DSM on a public hostname without opening ports. If you protect the tunnel with **Cloudflare Access**, create a service token and add its `CF-Access-Client-Id` / `CF-Access-Client-Secret` headers as **Custom Headers** in the credential.
+- **Synology DDNS + port forwarding**: enable DSM's DDNS with a Let's Encrypt certificate, forward the HTTPS port, and harden with the DSM firewall (geo/IP rules) and auto-block.
+- QuickConnect cannot be used — it is a relay, not a direct HTTP endpoint.
 
 ## Operations
 
