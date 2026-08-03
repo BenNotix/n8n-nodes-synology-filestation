@@ -668,10 +668,23 @@ export function fileErrorMessage(code: number): string {
 const PATH_PARAM_KEYS = ['path', 'folder_path', 'file_path', 'dest_folder_path', 'dest_file_path'];
 
 /**
- * A hint for the most common path mistakes — computer mount paths and internal
- * volume paths pasted where a File Station path (starting with the shared
- * folder name) is expected. DSM rejects those with unhelpful generic errors.
+ * A hint for the most common path mistake — a computer mount path or an
+ * internal volume path pasted where a File Station path (starting with the
+ * shared folder name) is expected. DSM rejects those with unhelpful generic
+ * errors. Case-sensitive on purpose: a real shared folder named "volumes"
+ * must not trigger the macOS hint.
  */
+export function fileStationPathHint(path: string): string | undefined {
+	if (/^\/Volumes\//.test(path)) {
+		return `"${path}" looks like a macOS mount path. File Station paths start with the shared folder name as shown in DSM (for example /photo/…) — remove the /Volumes prefix and use "Folder → List Shares" to see the available shared folders.`;
+	}
+	if (/^\/volume\d+\//.test(path)) {
+		return `"${path}" looks like an internal volume path. File Station paths start with the shared folder name (for example /photo/…), without the /volumeX prefix.`;
+	}
+	return undefined;
+}
+
+/** Apply `fileStationPathHint` to every path-carrying request parameter. */
 function pathFormatHint(params: IDataObject): string | undefined {
 	for (const key of PATH_PARAM_KEYS) {
 		const value = params[key];
@@ -680,13 +693,9 @@ function pathFormatHint(params: IDataObject): string | undefined {
 			if (typeof path !== 'string') {
 				continue;
 			}
-			// Case-sensitive on purpose: a real shared folder named "volumes"
-			// must not trigger the macOS hint
-			if (/^\/Volumes\//.test(path)) {
-				return `"${path}" looks like a macOS mount path. File Station paths start with the shared folder name as shown in DSM (for example /photo/…) — remove the /Volumes prefix and use "Folder → List Shares" to see the available shared folders.`;
-			}
-			if (/^\/volume\d+\//.test(path)) {
-				return `"${path}" looks like an internal volume path. File Station paths start with the shared folder name (for example /photo/…), without the /volumeX prefix.`;
+			const hint = fileStationPathHint(path);
+			if (hint !== undefined) {
+				return hint;
 			}
 		}
 	}

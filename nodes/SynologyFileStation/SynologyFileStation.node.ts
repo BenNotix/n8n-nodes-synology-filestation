@@ -27,6 +27,7 @@ import {
 	dsmErrorCode,
 	fileErrorMessage,
 	fileNameFromPath,
+	fileStationPathHint,
 	normalizeFileStationPath,
 	parseCustomHeaders,
 	resolvedApiVersion,
@@ -82,10 +83,11 @@ function assertNoFileError(
 	itemIndex: number,
 ): IDataObject {
 	if (typeof file.code === 'number') {
+		const path = typeof file.path === 'string' ? file.path : undefined;
 		throw new NodeOperationError(
 			this.getNode(),
-			`${fileErrorMessage(file.code)} (error ${file.code})${file.path !== undefined ? `: ${file.path as string}` : ''}`,
-			{ itemIndex },
+			`${fileErrorMessage(file.code)} (error ${file.code})${path !== undefined ? `: ${path}` : ''}`,
+			{ itemIndex, description: path !== undefined ? fileStationPathHint(path) : undefined },
 		);
 	}
 	return file;

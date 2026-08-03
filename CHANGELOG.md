@@ -2,6 +2,12 @@
 
 All notable changes to `n8n-nodes-synology-filestation` are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- The path-format hint (macOS `/Volumes/…` and internal `/volumeN/…` paths) now also appears on **per-file** errors — the way DSM actually reports an unknown path to `get`, `download`, `rename` and folder `create` (e.g. "No such file or directory (error 408)"). Previously the hint was only attached to top-level API errors.
+
 ## [1.0.2] - 2026-08-03
 
 ### Fixed
