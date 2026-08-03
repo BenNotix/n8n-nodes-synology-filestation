@@ -5,7 +5,8 @@ export class SynologyApi implements ICredentialType {
 
 	displayName = 'Synology API';
 
-	documentationUrl = 'https://github.com/BenNotix/n8n-nodes-synology?tab=readme-ov-file#credentials';
+	documentationUrl =
+		'https://github.com/BenNotix/n8n-nodes-synology-filestation?tab=readme-ov-file#credentials';
 
 	icon: Icon = { light: 'file:../icons/synology.svg', dark: 'file:../icons/synology.dark.svg' };
 
