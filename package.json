@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-synology-filestation",
-	"version": "1.0.3",
+	"version": "1.1.0",
 	"description": "n8n community node for Synology DSM File Station — browse, upload, download, copy, move, rename and delete files, create sharing links, search, compress/extract archives, checksums, thumbnails and more",
 	"keywords": [
 		"n8n-community-node-package",
@@ -42,7 +42,8 @@
 			"dist/credentials/SynologyApi.credentials.js"
 		],
 		"nodes": [
-			"dist/nodes/SynologyFileStation/SynologyFileStation.node.js"
+			"dist/nodes/SynologyFileStation/SynologyFileStation.node.js",
+			"dist/nodes/SynologyFileStationTrigger/SynologyFileStationTrigger.node.js"
 		]
 	},
 	"devDependencies": {

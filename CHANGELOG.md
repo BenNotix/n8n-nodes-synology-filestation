@@ -2,6 +2,18 @@
 
 All notable changes to `n8n-nodes-synology-filestation` are documented in this file.
 
+## [1.1.0] - 2026-08-03
+
+### Added
+
+- **Synology File Station Trigger** node: starts workflows on *File Created*, *File Updated* or *File Created or Updated* events. Watches a folder (subfolders optional) with pattern/extension/type filters, polling through NAS-side searches. The cursor is built on NAS timestamps with the NAS's own clock as reference, an overlap window and per-path deduplication — robust to clock drift, slow recursive scans, same-second bursts and files copied in with a preserved modification time.
+- **File → Exists** operation: returns `exists: true/false` (and `isdir`) instead of failing when the path is absent.
+- **AI agent support** documented: the node is exposed as an AI Agent tool (`usableAsTool`); resources now carry descriptions to help LLM tool selection. Requires `N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true` on self-hosted n8n.
+
+### Changed
+
+- The node and credential icons now use the official Synology wordmark (light and dark variants).
+
 ## [1.0.3] - 2026-08-03
 
 ### Fixed

@@ -1,8 +1,12 @@
 import type {
+	ICredentialsDecrypted,
+	ICredentialTestFunctions,
 	IDataObject,
 	IExecuteFunctions,
 	IHttpRequestOptions,
 	ILoadOptionsFunctions,
+	INodeCredentialTestResult,
+	IPollFunctions,
 	JsonObject,
 } from 'n8n-workflow';
 import { NodeApiError, NodeOperationError, sleep } from 'n8n-workflow';
@@ -14,7 +18,7 @@ import { NodeApiError, NodeOperationError, sleep } from 'n8n-workflow';
  */
 type Readable = Exclude<Parameters<IExecuteFunctions['helpers']['prepareBinaryData']>[0], Buffer>;
 
-export type SynologyContext = IExecuteFunctions | ILoadOptionsFunctions;
+export type SynologyContext = IExecuteFunctions | ILoadOptionsFunctions | IPollFunctions;
 
 /** Session name File Station APIs must be logged into (per the official API guide). */
 const SESSION_NAME = 'FileStation';
@@ -34,6 +38,11 @@ export interface SynologySession {
 	allowUnauthorizedCerts: boolean;
 	/** Extra headers from the credential, sent with every request (e.g. Cloudflare Access service tokens). */
 	headers: Record<string, string>;
+	/**
+	 * Server-side "now" (epoch seconds) parsed from the Date header of the
+	 * discovery response — the reference clock for comparing NAS timestamps.
+	 */
+	serverNow?: number;
 }
 
 /**
@@ -340,14 +349,14 @@ export async function synologyLogin(this: SynologyContext): Promise<SynologySess
 		headers: parseCustomHeaders(credentials),
 	};
 
-	let infoBody: unknown;
+	let infoResponse: { body: unknown; headers?: IDataObject };
 	try {
 		// DSM uses session-based authentication: SYNO.API.Auth issues a sid that
 		// every later request carries as the _sid parameter. That handshake cannot
 		// be expressed as a static credential `authenticate` block, so the generic
 		// httpRequestWithAuthentication helper does not apply here.
 		// eslint-disable-next-line @n8n/community-nodes/no-http-request-with-manual-auth
-		infoBody = await this.helpers.httpRequest({
+		infoResponse = (await this.helpers.httpRequest({
 			method: 'GET',
 			url: `${baseUrl}/webapi/query.cgi`,
 			qs: {
@@ -356,15 +365,23 @@ export async function synologyLogin(this: SynologyContext): Promise<SynologySess
 				method: 'query',
 				query: KNOWN_APIS.join(','),
 			},
+			returnFullResponse: true,
 			...baseRequestOptions(session),
-		});
+		})) as { body: unknown; headers?: IDataObject };
 	} catch (error) {
 		throw new NodeOperationError(
 			this.getNode(),
 			`Could not reach the Synology NAS at ${baseUrl}: ${(error as Error).message}`,
 		);
 	}
-	const info = parseJsonBody.call(this, infoBody);
+	const dateHeader = (infoResponse.headers ?? {}).date as string | undefined;
+	if (dateHeader !== undefined) {
+		const parsedDate = Date.parse(dateHeader);
+		if (!Number.isNaN(parsedDate)) {
+			session.serverNow = Math.floor(parsedDate / 1000);
+		}
+	}
+	const info = parseJsonBody.call(this, infoResponse.body);
 	if (info.success !== true) {
 		throw apiError.call(this, 'SYNO.API.Info', (info.error ?? {}) as IDataObject);
 	}
@@ -711,7 +728,7 @@ function pathFormatHint(params: IDataObject): string | undefined {
  * way to express a name with an intentional leading/trailing space.
  */
 export function normalizeFileStationPath(
-	this: IExecuteFunctions,
+	this: SynologyContext,
 	value: unknown,
 	itemIndex: number,
 ): string {
@@ -733,6 +750,102 @@ export function normalizeFileStationPath(
 		path = `/${path}`;
 	}
 	return path;
+}
+
+/**
+ * Programmatic credential test shared by the action and trigger nodes: a real
+ * DSM login that distinguishes bad credentials, 2FA accounts and URLs that do
+ * not point at a DSM Web API at all.
+ */
+export async function testSynologyCredential(
+	this: ICredentialTestFunctions,
+	credential: ICredentialsDecrypted,
+): Promise<INodeCredentialTestResult> {
+	const data = (credential.data ?? {}) as IDataObject;
+	const baseUrl = String(data.baseUrl ?? '')
+		.trim()
+		.replace(/\/+$/, '');
+	if (!/^https?:\/\//.test(baseUrl)) {
+		return {
+			status: 'Error',
+			message: 'The base URL must start with http:// or https://',
+		};
+	}
+	const rejectUnauthorized = data.ignoreSslIssues !== true;
+	const headers = parseCustomHeaders(data);
+	let responseBody: string;
+	try {
+		// ICredentialTestFunctions only exposes the `request` helper —
+		// `httpRequest` is not available in credential test functions
+		// eslint-disable-next-line @n8n/community-nodes/no-deprecated-workflow-functions
+		responseBody = (await this.helpers.request({
+			method: 'GET',
+			uri: `${baseUrl}/webapi/auth.cgi`,
+			qs: {
+				api: 'SYNO.API.Auth',
+				version: 3,
+				method: 'login',
+				account: data.username,
+				passwd: data.password,
+				session: 'FileStation',
+				format: 'sid',
+			},
+			headers,
+			json: false,
+			timeout: 10000,
+			rejectUnauthorized,
+		})) as string;
+	} catch (error) {
+		return {
+			status: 'Error',
+			message: `Could not reach the NAS: ${(error as Error).message}`,
+		};
+	}
+	let body: IDataObject;
+	try {
+		body = JSON.parse(responseBody) as IDataObject;
+	} catch {
+		return {
+			status: 'Error',
+			message:
+				'The URL did not return a DSM Web API response — check the base URL and port (5000 for HTTP, 5001 for HTTPS)',
+		};
+	}
+	if (body.success !== true) {
+		const code = ((body.error ?? {}) as IDataObject).code as number | undefined;
+		return {
+			status: 'Error',
+			message:
+				code !== undefined
+					? `${authErrorMessage(code)} (error ${code})`
+					: 'Login failed — check the username and password',
+		};
+	}
+	// Best-effort logout so the test does not leave a session behind
+	const sid = ((body.data ?? {}) as IDataObject).sid as string | undefined;
+	if (sid !== undefined) {
+		try {
+			// eslint-disable-next-line @n8n/community-nodes/no-deprecated-workflow-functions
+			await this.helpers.request({
+				method: 'GET',
+				uri: `${baseUrl}/webapi/auth.cgi`,
+				qs: {
+					api: 'SYNO.API.Auth',
+					version: 3,
+					method: 'logout',
+					session: 'FileStation',
+					_sid: sid,
+				},
+				headers,
+				json: false,
+				timeout: 10000,
+				rejectUnauthorized,
+			});
+		} catch {
+			// The sid expires on its own
+		}
+	}
+	return { status: 'OK', message: 'Authentication successful' };
 }
 
 /** Basename of a File Station path, for naming downloaded binaries. */

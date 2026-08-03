@@ -60,6 +60,7 @@ All paths start with a **shared folder as shown in DSM**, e.g. `/photo/vacation/
 | Copy / Move | Copy or move a file/folder to another folder (`SYNO.FileStation.CopyMove`), with overwrite/skip behavior and completion polling |
 | Delete | Delete a file/folder (`SYNO.FileStation.Delete`), recursive by default |
 | Download | Download a file as binary data (a folder is delivered as a ZIP archive) |
+| Exists | Check whether a file or folder exists — returns `exists: true/false` |
 | Get | Get file/folder information (size, times, owner, permissions, real path…) |
 | Rename | Rename a file/folder |
 | Upload | Upload binary data into a folder (`SYNO.FileStation.Upload`, multipart), with parent-folder creation and overwrite/skip behavior |
@@ -121,6 +122,28 @@ All paths start with a **shared folder as shown in DSM**, e.g. `/photo/vacation/
 | --- | --- |
 | Get Many | List the copy/move/delete/compress/extract tasks running on the NAS and their progress — useful with the "Wait for Completion: off" mode of the long-running operations |
 | Clear Finished | Remove finished tasks from the list |
+
+## Trigger
+
+The **Synology File Station Trigger** node starts a workflow when files change on the NAS:
+
+- **Events**: File Created, File Updated, File Created or Updated.
+- **Watches a folder** (subfolders optional), with pattern, extension and file-type filters.
+- **Polling-based** — the File Station API has no webhooks. On each poll the node runs server-side searches (`SYNO.FileStation.Search`) filtered by creation/modification time. The cursor uses **NAS-side timestamps** (with the NAS's own clock as reference), re-scans a 5-minute overlap window to absorb slow recursive scans and clock drift, and deduplicates per path — so events are neither missed nor fired twice. "Created or updated" combines a crtime and an mtime search, catching files copied in with a preserved (old) modification time. Configure the frequency with the standard *Poll Times* parameter.
+- On the first poll after activation nothing is emitted — the node starts watching from that moment.
+- The trigger emits file metadata; chain **File → Download** to fetch the content.
+
+## Use with AI agents
+
+The Synology File Station node is exposed as a **tool for n8n AI Agents** (`usableAsTool`): an agent can browse folders, search files, read metadata, create sharing links, upload or download on its own, with each operation and parameter described for the LLM.
+
+On self-hosted n8n, allow community packages as tools first:
+
+```bash
+N8N_COMMUNITY_PACKAGES_ALLOW_TOOL_USAGE=true
+```
+
+Then add "Synology File Station" as a tool of your AI Agent node. Parameters can be filled by the model automatically (`$fromAI`). Tip: use a dedicated DSM account with read-only permissions if the agent should not modify anything.
 
 ## Long-running operations
 

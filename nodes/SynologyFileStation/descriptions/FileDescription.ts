@@ -81,6 +81,12 @@ export const fileOperations: INodeProperties[] = [
 				action: 'Download a file',
 			},
 			{
+				name: 'Exists',
+				value: 'exists',
+				description: 'Check whether a file or folder exists',
+				action: 'Check if a file exists',
+			},
+			{
 				name: 'Get',
 				value: 'get',
 				description: 'Get information about a file or folder',
@@ -201,7 +207,7 @@ export const fileFields: INodeProperties[] = [
 	},
 
 	// ----------------------------------------
-	//                file: get
+	//           file: exists / get
 	// ----------------------------------------
 	{
 		displayName: 'Path',
@@ -211,7 +217,7 @@ export const fileFields: INodeProperties[] = [
 		default: '',
 		placeholder: '/photo/vacation/img_001.jpg',
 		description: 'Path of the file or folder, starting with a shared folder',
-		displayOptions: { show: { resource: ['file'], operation: ['get'] } },
+		displayOptions: { show: { resource: ['file'], operation: ['exists', 'get'] } },
 	},
 	{
 		displayName: 'Options',

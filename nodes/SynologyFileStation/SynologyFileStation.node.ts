@@ -23,19 +23,18 @@ import { shareFields, shareOperations } from './descriptions/ShareDescription';
 import { utilityFields, utilityOperations } from './descriptions/UtilityDescription';
 import type { SynologySession } from './GenericFunctions';
 import {
-	authErrorMessage,
 	dsmErrorCode,
 	fileErrorMessage,
 	fileNameFromPath,
 	fileStationPathHint,
 	normalizeFileStationPath,
-	parseCustomHeaders,
 	resolvedApiVersion,
 	synologyApiRequest,
 	synologyBinaryRequest,
 	synologyLogin,
 	synologyLogout,
 	synologyUploadRequest,
+	testSynologyCredential,
 	toEpochSeconds,
 	waitForSynologyTask,
 } from './GenericFunctions';
@@ -132,14 +131,46 @@ export class SynologyFileStation implements INodeType {
 				type: 'options',
 				noDataExpression: true,
 				options: [
-					{ name: 'Archive', value: 'archive' },
-					{ name: 'Background Task', value: 'backgroundTask' },
-					{ name: 'Favorite', value: 'favorite' },
-					{ name: 'File', value: 'file' },
-					{ name: 'Folder', value: 'folder' },
-					{ name: 'Search', value: 'search' },
-					{ name: 'Share Link', value: 'share' },
-					{ name: 'Utility', value: 'utility' },
+					{
+						name: 'Archive',
+						value: 'archive',
+						description: 'Compress files into ZIP/7z archives, extract or inspect them',
+					},
+					{
+						name: 'Background Task',
+						value: 'backgroundTask',
+						description: 'Track the long-running copy/move/delete/compress/extract tasks of the NAS',
+					},
+					{
+						name: 'Favorite',
+						value: 'favorite',
+						description: "Manage the account's favorite folders",
+					},
+					{
+						name: 'File',
+						value: 'file',
+						description: 'Upload, download, copy, move, rename, delete files or check they exist',
+					},
+					{
+						name: 'Folder',
+						value: 'folder',
+						description: 'Create and delete folders, list their contents or the shared folders',
+					},
+					{
+						name: 'Search',
+						value: 'search',
+						description: 'Find files on the NAS by name, extension, size, dates, owner',
+					},
+					{
+						name: 'Share Link',
+						value: 'share',
+						description: 'Create and manage public sharing links for files and folders',
+					},
+					{
+						name: 'Utility',
+						value: 'utility',
+						description: 'Checksums, folder sizes, thumbnails, permission checks and NAS info',
+					},
 				],
 				default: 'file',
 			},
@@ -168,91 +199,7 @@ export class SynologyFileStation implements INodeType {
 				this: ICredentialTestFunctions,
 				credential: ICredentialsDecrypted,
 			): Promise<INodeCredentialTestResult> {
-				const data = (credential.data ?? {}) as IDataObject;
-				const baseUrl = String(data.baseUrl ?? '')
-					.trim()
-					.replace(/\/+$/, '');
-				if (!/^https?:\/\//.test(baseUrl)) {
-					return {
-						status: 'Error',
-						message: 'The base URL must start with http:// or https://',
-					};
-				}
-				const rejectUnauthorized = data.ignoreSslIssues !== true;
-				const headers = parseCustomHeaders(data);
-				let responseBody: string;
-				try {
-					// ICredentialTestFunctions only exposes the `request` helper —
-					// `httpRequest` is not available in credential test functions
-					// eslint-disable-next-line @n8n/community-nodes/no-deprecated-workflow-functions
-					responseBody = (await this.helpers.request({
-						method: 'GET',
-						uri: `${baseUrl}/webapi/auth.cgi`,
-						qs: {
-							api: 'SYNO.API.Auth',
-							version: 3,
-							method: 'login',
-							account: data.username,
-							passwd: data.password,
-							session: 'FileStation',
-							format: 'sid',
-						},
-						headers,
-						json: false,
-						timeout: 10000,
-						rejectUnauthorized,
-					})) as string;
-				} catch (error) {
-					return {
-						status: 'Error',
-						message: `Could not reach the NAS: ${(error as Error).message}`,
-					};
-				}
-				let body: IDataObject;
-				try {
-					body = JSON.parse(responseBody) as IDataObject;
-				} catch {
-					return {
-						status: 'Error',
-						message:
-							'The URL did not return a DSM Web API response — check the base URL and port (5000 for HTTP, 5001 for HTTPS)',
-					};
-				}
-				if (body.success !== true) {
-					const code = ((body.error ?? {}) as IDataObject).code as number | undefined;
-					return {
-						status: 'Error',
-						message:
-							code !== undefined
-								? `${authErrorMessage(code)} (error ${code})`
-								: 'Login failed — check the username and password',
-					};
-				}
-				// Best-effort logout so the test does not leave a session behind
-				const sid = ((body.data ?? {}) as IDataObject).sid as string | undefined;
-				if (sid !== undefined) {
-					try {
-						// eslint-disable-next-line @n8n/community-nodes/no-deprecated-workflow-functions
-						await this.helpers.request({
-							method: 'GET',
-							uri: `${baseUrl}/webapi/auth.cgi`,
-							qs: {
-								api: 'SYNO.API.Auth',
-								version: 3,
-								method: 'logout',
-								session: 'FileStation',
-								_sid: sid,
-							},
-							headers,
-							json: false,
-							timeout: 10000,
-							rejectUnauthorized,
-						});
-					} catch {
-						// The sid expires on its own
-					}
-				}
-				return { status: 'OK', message: 'Authentication successful' };
+				return await testSynologyCredential.call(this, credential);
 			},
 		},
 	};
@@ -378,6 +325,26 @@ export class SynologyFileStation implements INodeType {
 								pairedItem: { item: i },
 							});
 							continue;
+						} else if (operation === 'exists') {
+							const path = getPath('path', i);
+							const data = await synologyApiRequest.call(
+								this,
+								session,
+								'SYNO.FileStation.List',
+								'getinfo',
+								{ path: [path] },
+							);
+							const file = ((data.files as IDataObject[]) ?? [])[0] ?? {};
+							if (typeof file.code === 'number') {
+								if (file.code === 408) {
+									// "No such file or directory" is the answer, not an error
+									responseData = { exists: false, path };
+								} else {
+									assertNoFileError.call(this, file, i);
+								}
+							} else {
+								responseData = { exists: true, path, isdir: file.isdir === true };
+							}
 						} else if (operation === 'get') {
 							const path = getPath('path', i);
 							const options = this.getNodeParameter('options', i, {}) as IDataObject;
