@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-synology-filestation",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"description": "n8n community nodes for Synology DSM File Station — manage NAS files (upload, download, copy, move, rename, delete, share links, search, archives, checksums, thumbnails), trigger workflows on file changes, and expose it all as an AI Agent tool",
 	"keywords": [
 		"n8n-community-node-package",
