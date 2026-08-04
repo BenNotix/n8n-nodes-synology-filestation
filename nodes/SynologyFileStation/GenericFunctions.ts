@@ -71,6 +71,8 @@ const PREFERRED_VERSIONS: Record<string, number> = {
 	'SYNO.FileStation.Extract': 2,
 	'SYNO.FileStation.Compress': 3,
 	'SYNO.FileStation.BackgroundTask': 3,
+	// Cloud Sync exposes a single, version-1 API on DSM 6 and DSM 7
+	'SYNO.CloudSync': 1,
 };
 
 const KNOWN_APIS = Object.keys(PREFERRED_VERSIONS);
@@ -330,6 +332,23 @@ function resolveApi(session: SynologySession, api: string): { path: string; vers
 /** Version of an API as it will actually be requested from this NAS. */
 export function resolvedApiVersion(session: SynologySession, api: string): number {
 	return resolveApi(session, api).version;
+}
+
+/**
+ * Fail with an actionable message when the NAS does not expose an API —
+ * typically because the corresponding package (e.g. Cloud Sync) is not
+ * installed. Without this check the request would die with a cryptic
+ * "requested API does not exist" (error 102).
+ */
+export function requireSynologyApi(
+	this: SynologyContext,
+	session: SynologySession,
+	api: string,
+	message: string,
+): void {
+	if (session.apiInfo[api] === undefined) {
+		throw new NodeOperationError(this.getNode(), message);
+	}
 }
 
 /**

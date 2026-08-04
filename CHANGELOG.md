@@ -2,6 +2,17 @@
 
 All notable changes to `n8n-nodes-synology-filestation` are documented in this file.
 
+## [1.2.0] - 2026-08-04
+
+### Added
+
+- **Synology Cloud Sync** node (same credential): monitor and control the Cloud Sync package. Connections (list with sync status, get settings and cloud info, pause/resume one or all, filterable sync logs with pagination, unlink), sync tasks (list folder pairs with status, remove) and reports (package configuration, recently synchronized files). Usable as an AI Agent tool.
+- Explicit error message when the Cloud Sync package is not installed on the NAS, instead of DSM's generic "requested API does not exist".
+
+### Notes
+
+- The Cloud Sync API is not officially documented by Synology; the node uses the same reverse-engineered `SYNO.CloudSync` endpoints as the DSM web UI (confirmed identical on DSM 6 and DSM 7). Creating connections or sync tasks (OAuth flows) is out of scope.
+
 ## [1.1.1] - 2026-08-03
 
 ### Changed

@@ -1,7 +1,7 @@
 {
 	"name": "n8n-nodes-synology-filestation",
-	"version": "1.1.1",
-	"description": "n8n community nodes for Synology DSM File Station — manage NAS files (upload, download, copy, move, rename, delete, share links, search, archives, checksums, thumbnails), trigger workflows on file changes, and expose it all as an AI Agent tool",
+	"version": "1.2.0",
+	"description": "n8n community nodes for Synology DSM File Station — manage NAS files (upload, download, copy, move, rename, delete, share links, search, archives, checksums, thumbnails), trigger workflows on file changes, control Cloud Sync connections, and expose it all as AI Agent tools",
 	"keywords": [
 		"n8n-community-node-package",
 		"synology",
@@ -11,6 +11,7 @@
 		"filestation",
 		"files",
 		"storage",
+		"cloud sync",
 		"trigger",
 		"automation",
 		"backup",
@@ -48,7 +49,8 @@
 		],
 		"nodes": [
 			"dist/nodes/SynologyFileStation/SynologyFileStation.node.js",
-			"dist/nodes/SynologyFileStationTrigger/SynologyFileStationTrigger.node.js"
+			"dist/nodes/SynologyFileStationTrigger/SynologyFileStationTrigger.node.js",
+			"dist/nodes/SynologyCloudSync/SynologyCloudSync.node.js"
 		]
 	},
 	"devDependencies": {

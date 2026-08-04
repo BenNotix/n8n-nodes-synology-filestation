@@ -1,6 +1,6 @@
 # n8n-nodes-synology-filestation
 
-n8n community node for **Synology DSM File Station** — manage the files of your Synology NAS natively from your n8n workflows: browse, upload, download, copy, move, rename, delete, create share links, search, compress/extract archives, checksums, thumbnails and more.
+n8n community nodes for **Synology DSM** — manage the files of your NAS natively from your n8n workflows (browse, upload, download, copy, move, rename, delete, share links, search, archives, checksums, thumbnails), trigger workflows when files change, and monitor or control **Cloud Sync**.
 
 Works with **DSM 6 and DSM 7**: the node discovers the API versions and paths of your NAS through `SYNO.API.Info` at runtime, exactly as the [official API guide](https://global.download.synology.com/download/Document/Software/DeveloperGuide/Package/FileStation/All/enu/Synology_File_Station_API_Guide.pdf) prescribes.
 
@@ -111,7 +111,7 @@ All paths start with a **shared folder as shown in DSM**, e.g. `/photo/vacation/
 | Operation | Description |
 | --- | --- |
 | Check Permission | Check whether the account could write a given file into a folder — returns `writable: true/false` |
-| Get Directory Size | Compute the accumulated size / file count of a folder |
+| Get Folder Size | Compute the accumulated size / file count of a folder |
 | Get Info | File Station information (hostname, capabilities) — handy as a connection test |
 | Get MD5 | Compute the MD5 checksum of a file on the NAS |
 | Get Thumbnail | Get the image/video thumbnail of a file as binary data |
@@ -141,9 +141,23 @@ The **Synology File Station Trigger** node starts a workflow when files change o
 - On the first poll after activation nothing is emitted — the node starts watching from that moment.
 - The trigger emits file metadata; chain **File → Download** to fetch the content.
 
+## Synology Cloud Sync node
+
+The **Synology Cloud Sync** node monitors and controls the [Cloud Sync](https://www.synology.com/en-global/dsm/feature/cloud_sync) package (Google Drive, Dropbox, OneDrive, S3 and 20+ other providers) with the same credential:
+
+| Resource | Operations |
+| --- | --- |
+| Connection | Get Many (connections with sync status and pending-file counts), Get (settings + cloud info), Pause / Resume (one or all connections), Get Logs (filterable sync history), Delete (unlink) |
+| Task | Get Many (the folder pairs of a connection and their status), Delete |
+| Report | Get Configuration, Get Recently Changed (last synchronized files) |
+
+Typical automations: pause Cloud Sync before a big local file operation and resume it after, alert when a connection reports errors or piles up unfinished files, or log the sync history elsewhere.
+
+> **Heads-up**: Synology does not publish official documentation for the Cloud Sync API. This node uses the same reverse-engineered `SYNO.CloudSync` endpoints as the DSM web UI (version-pinned through `SYNO.API.Info`), which may change in future Cloud Sync releases. Creating connections or sync tasks (OAuth flows) is out of scope. Most operations require an account allowed to use the Cloud Sync application; if the package is not installed the node fails with an explicit message.
+
 ## Use with AI agents
 
-The Synology File Station node is exposed as a **tool for n8n AI Agents** (`usableAsTool`): an agent can browse folders, search files, read metadata, create share links, upload or download on its own, with each operation and parameter described for the LLM.
+The Synology File Station and Synology Cloud Sync nodes are exposed as **tools for n8n AI Agents** (`usableAsTool`): an agent can browse folders, search files, read metadata, create share links, upload or download on its own, with each operation and parameter described for the LLM.
 
 On self-hosted n8n, allow community packages as tools first:
 

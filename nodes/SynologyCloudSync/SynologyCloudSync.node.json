@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-synology-filestation.synologyCloudSync",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Data & Storage"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://github.com/BenNotix/n8n-nodes-synology-filestation?tab=readme-ov-file#credentials"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/BenNotix/n8n-nodes-synology-filestation?tab=readme-ov-file"
+			}
+		]
+	}
+}
